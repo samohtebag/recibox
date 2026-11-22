@@ -6,6 +6,7 @@ A personal recipe box: save recipes from links, pasted captions (Instagram / Tik
 
 - **Import from a link** – reads the structured recipe data (schema.org JSON-LD) that almost every recipe site publishes; falls back to heuristics on the page text.
 - **Import from a caption** – paste an Instagram/TikTok/YouTube caption or any recipe text; Ingredients / Instructions sections, bullets, numbering and `#hashtags` (→ tags) are detected. You always get a review/edit screen before saving.
+- **Import from a PDF** – recipe cards, cookbook pages, or any site saved via *Print → Save as PDF* (handy for paywalled sites). Text is extracted on-device with a bundled copy of pdf.js; scanned/photo PDFs need OCR, which isn't included yet.
 - **Browser bookmarklet** (desktop) – one click on any page, including an open Instagram post, sends the recipe or caption to Recibox.
 - **Android share target** – install the PWA, then *Share → Recibox* from any app.
 - **Library** – search (title, ingredients, tags, notes), tags, favorites.

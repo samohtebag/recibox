@@ -122,7 +122,7 @@ async function importUrl(url) {
     if (e.partial) { S.draftImage = e.partial.image; S.pasteText = [e.partial.title, e.partial.caption].filter(Boolean).join('\n\n'); }
     S.notice = e.message === 'no-recipe'
       ? "I opened the page but couldn't find a structured recipe (common with Instagram/TikTok). I pulled what I could — paste the full caption below and I'll sort it out."
-      : "That site blocked the free import proxies (common with NYT Cooking and other paywalled/bot-protected sites). Easiest fixes: use the “Save to Recibox” bookmarklet from Settings while on the recipe page, or paste the recipe text here.";
+      : "That site blocked the free import proxies (common with NYT Cooking and other paywalled/bot-protected sites). Easiest fixes: use the “Save to Recibox” bookmarklet from Settings while on the recipe page, save the page as a PDF and use the PDF tab, or paste the recipe text here.";
     if (location.hash !== '#/add') location.hash = '#/add'; else render();
   }
 }
@@ -135,6 +135,53 @@ function importText() {
   if (S.pasteUrl === url && S.draftImage) S.draft.image = S.draftImage;
   S.notice = ''; S.pasteText = '';
   location.hash = '#/edit/new';
+}
+
+/* ---- PDF import (pdf.js is bundled in /vendor and loaded on demand) ---- */
+let pdfLoading;
+function loadPdfJs() {
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  return (pdfLoading ||= new Promise((res, rej) => {
+    const el = Object.assign(document.createElement('script'), { src: 'vendor/pdf.min.js' });
+    el.onload = () => { pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js'; res(pdfjsLib); };
+    el.onerror = () => { pdfLoading = null; rej(new Error('Could not load the PDF reader (offline?)')); };
+    document.head.appendChild(el);
+  }));
+}
+async function pdfToText(file) {
+  const lib = await loadPdfJs();
+  const pdf = await lib.getDocument({ data: await file.arrayBuffer() }).promise;
+  const out = [];
+  for (let n = 1; n <= Math.min(pdf.numPages, 30); n++) {
+    const content = await (await pdf.getPage(n)).getTextContent();
+    let lastY = null, line = '';
+    for (const it of content.items) {
+      const y = Math.round(it.transform[5]);
+      if (lastY !== null && Math.abs(y - lastY) > 2) { out.push(line.trim()); line = ''; }
+      line += it.str + (it.hasEOL ? '\n' : '');
+      lastY = y;
+    }
+    out.push(line.trim());
+    out.push('');
+  }
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+async function importPdf(file) {
+  if (!file) return;
+  if (!/pdf$/i.test(file.type) && !/\.pdf$/i.test(file.name)) return toast('That is not a PDF');
+  S.busy = true; S.notice = 'Reading ' + file.name + '…'; render();
+  try {
+    const text = await pdfToText(file);
+    S.busy = false;
+    if (text.replace(/\s/g, '').length < 40) {
+      S.notice = 'No text found in that PDF. It may be a scan or photo — text recognition (OCR) is not supported yet.'; return render();
+    }
+    const p = L.parseText(text);
+    S.draft = { ...blank(), title: p.title || file.name.replace(/\.pdf$/i, ''), ingredients: p.ingredients, steps: p.steps, tags: p.tags, notes: (p.ingredients.length || p.steps.length) ? p.notes : text.slice(0, 4000) };
+    S.notice = ''; location.hash = '#/edit/new';
+  } catch (e) {
+    S.busy = false; S.notice = "Couldn't read that PDF: " + (e.message || e); render();
+  }
 }
 
 /* ============ view helpers ============ */
@@ -225,7 +272,8 @@ function addView() {
   return `<div class="hdr"><h1>Add recipe</h1></div>
   ${S.notice ? `<div class="notice">${esc(S.notice)}</div>` : ''}
   <div class="tabs"><button class="${t === 'link' ? 'on' : ''}" data-act="tab" data-v="link">Link</button>
-    <button class="${t === 'text' ? 'on' : ''}" data-act="tab" data-v="text">Paste text</button>
+    <button class="${t === 'text' ? 'on' : ''}" data-act="tab" data-v="text">Paste</button>
+    <button class="${t === 'pdf' ? 'on' : ''}" data-act="tab" data-v="pdf">PDF</button>
     <button class="${t === 'manual' ? 'on' : ''}" data-act="tab" data-v="manual">Manual</button></div>
   ${t === 'link' ? `<div class="panel"><label class="f" style="margin-top:0">Recipe link</label>
       <input id="url" type="url" inputmode="url" placeholder="https://…" value="${esc(S.pasteUrl)}" ${S.busy ? 'disabled' : ''}>
@@ -235,6 +283,9 @@ function addView() {
       <textarea id="pasteText" style="min-height:220px" placeholder="Paste a video caption or any recipe text. Lines under 'Ingredients' and 'Instructions' are detected automatically.">${esc(S.pasteText)}</textarea>
       <label class="f">Source link (optional)</label><input id="pasteUrl" type="url" value="${esc(S.pasteUrl)}" placeholder="https://instagram.com/…">
       <div class="gap"><button class="btn" data-act="importText">Parse &amp; review</button></div></div>` : ''}
+  ${t === 'pdf' ? `<div class="panel"><label id="drop" class="drop" for="pdfFile"><b>${S.busy ? 'Reading PDF…' : 'Choose a PDF'}</b><span class="small muted">or drop it here · recipe cards, cookbook pages, “Print → Save as PDF” from any website</span></label>
+      <input id="pdfFile" type="file" accept="application/pdf,.pdf" hidden ${S.busy ? 'disabled' : ''}>
+      <p class="small muted">Read entirely on your device — the file is never uploaded. Scanned/photo PDFs aren't supported yet.</p></div>` : ''}
   ${t === 'manual' ? `<div class="panel"><p class="muted" style="margin-top:0">Start with an empty recipe.</p><button class="btn" data-act="manual">Create recipe</button></div>` : ''}`;
 }
 
@@ -367,11 +418,14 @@ document.addEventListener('change', e => {
   const el = e.target;
   if (el.dataset?.act === 'gToggle') return acts.gToggle(el);
   if (el.id === 'importFile') importBackup(el.files[0]);
+  if (el.id === 'pdfFile') importPdf(el.files[0]);
 });
 document.addEventListener('input', e => {
   if (e.target.id === 'q') { S.q = e.target.value; $('#grid').innerHTML = gridHtml(); }
   if (e.target.id === 'pasteText') S.pasteText = e.target.value;
 });
+document.addEventListener('dragover', e => { if ($('#drop')) e.preventDefault(); });
+document.addEventListener('drop', e => { if ($('#drop')) { e.preventDefault(); importPdf(e.dataTransfer.files[0]); } });
 document.addEventListener('submit', async e => {
   e.preventDefault();
   if (e.target.id === 'gform') {

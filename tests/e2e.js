@@ -66,6 +66,21 @@ const ok = (c, m) => { if (!c) { console.error('FAIL', m); process.exitCode = 1;
   await pg.goto(base + '?url=' + encodeURIComponent('https://example.com/recipe') + '&title=x'); await pg.waitForSelector('#rform');
   ok(await pg.inputValue('[name=title]') === 'Best Chili', 'share target import');
 
+  // PDF import: render a recipe page to a real PDF, then upload it
+  const gen = await ctx.newPage();
+  await gen.setContent('<body style="font-family:sans-serif"><h1>Lemon Herb Chicken</h1><p>A weeknight favourite.</p><h2>Ingredients</h2><ul><li>4 chicken thighs</li><li>2 tbsp olive oil</li><li>1 1/2 tsp dried oregano</li><li>1 lemon, juiced</li></ul><h2>Instructions</h2><ol><li>Heat the oven to 200C and season the chicken well.</li><li>Roast for 35 minutes until golden and cooked through.</li></ol></body>');
+  const pdfBuf = await gen.pdf({ format: 'A4' }); await gen.close();
+  await pg.goto(base + '#/add'); await pg.waitForSelector('.tabs'); await pg.click('[data-act=tab][data-v=pdf]');
+  await pg.setInputFiles('#pdfFile', { name: 'chicken.pdf', mimeType: 'application/pdf', buffer: pdfBuf });
+  await pg.waitForSelector('#rform', { timeout: 20000 });
+  ok(await pg.inputValue('[name=title]') === 'Lemon Herb Chicken', 'PDF title: ' + await pg.inputValue('[name=title]'));
+  ok((await pg.inputValue('[name=ingredients]')).split('\n').length === 4, 'PDF ingredients: ' + JSON.stringify(await pg.inputValue('[name=ingredients]')));
+  ok((await pg.inputValue('[name=steps]')).split('\n').length === 2, 'PDF steps');
+  await pg.screenshot({ path: '/tmp/shots/pdf-review.png' });
+  // non-pdf / empty-text PDF handled
+  await pg.goto(base + '#/add'); await pg.waitForSelector('.tabs'); await pg.click('[data-act=tab][data-v=pdf]');
+  await pg.screenshot({ path: '/tmp/shots/pdf-tab.png' });
+
   // persistence + export
   await pg.goto(base); await pg.waitForSelector('.card'); ok(await pg.locator('.card').count() === 3, 'persisted after reload');
   await pg.click('a[href="#/settings"]'); await pg.screenshot({ path: '/tmp/shots/settings.png', fullPage: true });
