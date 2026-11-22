@@ -33,7 +33,7 @@ const store = {
   get(k, d) { try { return JSON.parse(localStorage.getItem('recibox.' + k)) ?? d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem('recibox.' + k, JSON.stringify(v)); } catch { /* private mode */ } }
 };
-const DEFAULT_PROXIES = ['https://corsproxy.io/?url={url}', 'https://api.allorigins.win/raw?url={url}'];
+const DEFAULT_PROXIES = ['https://corsproxy.io/?url={url}', 'https://api.allorigins.win/raw?url={url}', 'https://api.codetabs.com/v1/proxy/?quest={url}'];
 const settings = () => ({ proxies: DEFAULT_PROXIES, ...store.get('settings', {}) });
 
 /* ============ state ============ */
@@ -122,7 +122,7 @@ async function importUrl(url) {
     if (e.partial) { S.draftImage = e.partial.image; S.pasteText = [e.partial.title, e.partial.caption].filter(Boolean).join('\n\n'); }
     S.notice = e.message === 'no-recipe'
       ? "I opened the page but couldn't find a structured recipe (common with Instagram/TikTok). I pulled what I could — paste the full caption below and I'll sort it out."
-      : "Couldn't reach that page through the proxy. Copy the recipe text (or the video caption) and paste it here instead.";
+      : "That site blocked the free import proxies (common with NYT Cooking and other paywalled/bot-protected sites). Easiest fixes: use the “Save to Recibox” bookmarklet from Settings while on the recipe page, or paste the recipe text here.";
     if (location.hash !== '#/add') location.hash = '#/add'; else render();
   }
 }
