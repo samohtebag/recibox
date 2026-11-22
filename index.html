@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Recibox</title>
+  <meta name="description" content="Save recipes from links, captions and videos. Private, free, no subscription.">
+  <meta name="theme-color" content="#e4572e">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Recibox">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="app" aria-live="polite"></main>
+  <nav id="nav" aria-label="Main">
+    <a href="#/" data-nav="list"><span>📖</span>Recipes</a>
+    <a href="#/add" data-nav="add"><span>＋</span>Add</a>
+    <a href="#/grocery" data-nav="grocery"><span>🛒</span>Grocery</a>
+    <a href="#/settings" data-nav="settings"><span>⚙️</span>Settings</a>
+  </nav>
+  <div id="toast" role="status"></div>
+  <script src="lib.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
